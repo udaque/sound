@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>소리를 컴퓨터로 다루기 — 파형, 샘플링, 그리고 이펙트</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --border:#2b3344;
+    --text:#dfe6f1; --dim:#8b96a8; --accent:#7c9cff; --accent2:#ffb454;
+    --good:#4ade80; --ok:#38bdf8; --mild:#fbbf24; --bad:#f87171; --pink:#f472b6;
+    --mono:ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+       line-height:1.65}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 20px 90px}
+  header{padding:64px 0 24px;text-align:center}
+  header h1{font-size:2.1rem;margin:0 0 10px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  header p{color:var(--dim);max-width:660px;margin:0 auto}
+  h2{font-size:1.35rem;margin:60px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h2 .no{color:var(--accent);font-family:var(--mono);margin-right:8px}
+  h3{font-size:1.02rem}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:14px}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .card h3{margin:0 0 8px;color:var(--accent)}
+  .card p{margin:6px 0;font-size:.92rem;color:var(--dim)}
+  .card p b{color:var(--text)}
+  .math{font-family:var(--mono);color:var(--text)}
+  code,.mono{font-family:var(--mono);font-size:.92em;background:var(--panel2);
+    border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+  .eq{font-family:var(--mono);text-align:center;background:var(--panel2);
+    border:1px solid var(--border);border-radius:8px;padding:10px;margin:10px 0;font-size:.95rem}
+  .eq b{color:var(--accent2)}
+
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--border);
+    background:var(--panel2);color:var(--text);padding:7px 14px;font-size:.86rem;transition:all .15s}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.play{background:linear-gradient(135deg,#2b3a6b,#1e2a4f);border-color:#3d5fd6}
+  button.play:hover{color:#fff;border-color:var(--accent)}
+  button.ghost{background:transparent}
+  button.active{border-color:var(--accent2);color:var(--accent2);background:#2a2316;font-weight:700}
+  button.playing{border-color:var(--good);color:var(--good);background:#13241a}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .presets{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+
+  input[type=range]{accent-color:var(--accent);width:100%;margin:2px 0}
+  .ctrl{margin:10px 0}
+  .ctrl label{display:flex;justify-content:space-between;font-size:.82rem;color:var(--dim);font-family:var(--mono)}
+  .ctrl label b{color:var(--accent2)}
+  canvas{width:100%;display:block;background:#0a0e14;border:1px solid var(--border);border-radius:10px}
+  .cap{font-size:.8rem;color:var(--dim);margin-top:6px;text-align:center}
+  .legend{display:flex;gap:16px;justify-content:center;font-size:.78rem;color:var(--dim);margin:6px 0}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .swatch{width:14px;height:3px;border-radius:2px;display:inline-block}
+
+  .callout{border-left:4px solid var(--accent);background:#12182a;border-radius:0 12px 12px 0;padding:18px 22px;margin:14px 0}
+  .callout h3{margin-top:0;color:var(--accent)}
+  .callout.good{border-left-color:var(--good);background:#12201a}
+  .callout.good h3{color:var(--good)}
+
+  table{border-collapse:collapse;width:100%;font-size:.86rem}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--dim);font-weight:600}
+  td .mono,td{font-family:var(--mono)}
+
+  /* 이펙트 갤러리 */
+  .fxgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .fxcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column}
+  .fxcard h3{margin:0 0 2px;color:var(--accent2)}
+  .fxcard .en{font-size:.74rem;color:var(--dim);font-family:var(--mono);margin-bottom:6px}
+  .fxcard .d{font-size:.86rem;color:var(--dim);margin:0 0 10px;min-height:42px}
+  .fxcard canvas{height:120px}
+  .fxcard .btns{display:flex;gap:8px;margin-top:10px}
+  .fxcard .btns button{flex:1}
+  .tag{display:inline-block;font-size:.68rem;font-family:var(--mono);border-radius:5px;padding:1px 7px;margin-left:6px;
+    background:rgba(124,156,255,.15);color:var(--accent)}
+  .tag.time{background:rgba(244,114,182,.15);color:var(--pink)}
+  .tag.dyn{background:rgba(74,222,128,.15);color:var(--good)}
+  .tag.pitch{background:rgba(56,189,248,.15);color:var(--ok)}
+
+  footer{margin-top:70px;text-align:center;color:var(--dim);font-size:.82rem}
+  sup{font-size:.7em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>소리를 컴퓨터로 다루기</h1>
+  <p>소리는 공기의 떨림, 즉 <b>파형</b>입니다. 그 파형을 숫자의 나열로 바꾸면(샘플링) 컴퓨터가 소리를 저장하고
+     분석하고 변형할 수 있게 됩니다. 파형의 주파수·진폭·위상이 무엇인지, 어떻게 wav가 되는지,
+     그리고 리버브·디스토션·플랜저 같은 음향 도구가 파형에 정확히 <b>무슨 일</b>을 하는지
+     눈과 귀로 직접 만져보며 알아봅시다. (모든 소리는 Web Audio API로 즉석 합성됩니다 — 스피커를 켜세요 🔊)</p>
+</header>
+
+<h2><span class="no">1</span>소리는 파형이다 — 주파수와 진폭</h2>
+<div class="card">
+  <p>마이크는 시시각각 변하는 <b>공기 압력</b>을 측정해 위아래로 출렁이는 곡선 하나로 기록합니다.
+     이 곡선이 곧 소리입니다. 가장 단순한 소리인 <b>사인파</b>는 두 숫자로 완전히 결정됩니다.</p>
+  <div class="grid3" style="margin:14px 0">
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <h3 style="color:var(--accent2);margin:0 0 6px">진폭 (Amplitude)</h3>
+      <p style="margin:0">파형이 위아래로 흔들리는 <b>크기</b>. 클수록 <b>큰 소리</b>(음량)로 들립니다.</p>
+    </div>
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <h3 style="color:var(--accent2);margin:0 0 6px">주파수 (Frequency)</h3>
+      <p style="margin:0">1초에 몇 번 출렁이는가(Hz). 빠를수록 <b>높은 음</b>으로 들립니다.</p>
+    </div>
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <h3 style="color:var(--accent2);margin:0 0 6px">파형 모양 (Timbre)</h3>
+      <p style="margin:0">사인/톱니/사각 등 <b>모양</b>이 음색을 결정합니다 (3장에서 자세히).</p>
+    </div>
+  </div>
+  <canvas id="w1" style="height:170px"></canvas>
+  <div class="legend"><span><i class="swatch" style="background:#7c9cff"></i>현재 파형</span></div>
+  <div class="ctrl"><label>주파수 <b id="w1f">220 Hz</b></label><input type="range" id="w1fr" min="55" max="880" value="220" step="1"></div>
+  <div class="ctrl"><label>진폭 <b id="w1a">0.60</b></label><input type="range" id="w1ar" min="0" max="100" value="60" step="1"></div>
+  <div class="row"><button class="play" id="w1play">▶ 이 사인파 듣기</button>
+    <span style="font-size:.85rem;color:var(--dim)" id="w1note"></span></div>
+</div>
+
+<div class="card">
+  <h3 style="color:var(--accent2)">왜 2배속으로 재생하면 음이 올라갈까?</h3>
+  <p>녹음을 빨리 감으면 목소리가 다람쥐처럼 변하죠. 이유는 단순합니다. 파형을 <b>2배 빠르게</b> 재생하면
+     모든 출렁임의 주기가 <b>절반</b>으로 짧아지고, 따라서 주파수가 <b>2배</b>가 됩니다.
+     주파수 2배 = 정확히 <b>한 옥타브 위</b>입니다. 속도와 음높이가 한 몸으로 묶여 있는 것이죠.
+     (3·5장에서 이 둘을 떼어놓는 진짜 <b>피치 시프트</b>가 왜 어려운지 봅니다.)</p>
+  <div class="eq">재생 속도 ×<b>r</b> &nbsp;⇒&nbsp; 주파수 ×<b>r</b> &nbsp;⇒&nbsp; 음높이 <b>+12·log₂(r)</b> 반음</div>
+  <div class="row">
+    <button class="play" id="sp05">▶ 0.5× (한 옥타브 아래)</button>
+    <button class="play" id="sp10">▶ 1× (원음)</button>
+    <button class="play" id="sp20">▶ 2× (한 옥타브 위)</button>
+  </div>
+  <p style="font-size:.82rem">같은 멜로디 한 토막을 재생 속도만 바꿔 들려줍니다. 빨라질수록 짧아지고 높아집니다.</p>
+</div>
+
+<h2><span class="no">2</span>샘플링 — 파형을 숫자로 (wav가 만들어지는 법)</h2>
+<div class="card">
+  <p>컴퓨터는 연속된 곡선을 그대로 담을 수 없습니다. 대신 <b>아주 짧은 간격마다 파형의 높이(진폭)를 측정</b>해
+     숫자로 적어둡니다. 1초에 측정하는 횟수가 <b>샘플레이트</b>(표본화 주파수)입니다.
+     CD는 1초에 <b>44,100번</b> 잽니다. wav 파일이란 결국 이 측정값들을 줄줄이 나열한 것 + 작은 머리말(헤더)일 뿐입니다.</p>
+  <canvas id="w2" style="height:190px"></canvas>
+  <div class="legend">
+    <span><i class="swatch" style="background:#7c9cff"></i>원래 파형</span>
+    <span><i class="swatch" style="background:#ffb454"></i>샘플 점</span>
+    <span><i class="swatch" style="background:#4ade80"></i>저장되는 계단(복원)</span>
+  </div>
+  <div class="ctrl"><label>샘플레이트 <b id="w2s">40 samples/window</b></label><input type="range" id="w2sr" min="6" max="120" value="40" step="1"></div>
+  <p style="font-size:.82rem">샘플을 촘촘히 찍을수록 계단이 원래 곡선에 가까워집니다. 그런데 얼마나 촘촘해야 '충분'할까요?</p>
+</div>
+
+<div class="card">
+  <h3 style="color:var(--accent2)">나이퀴스트–섀넌 표본화 정리, 그리고 에일리어싱</h3>
+  <p>놀랍게도 답은 정확히 정해져 있습니다. <b>섀넌</b>의 표본화 정리:</p>
+  <div class="eq">신호에 들어 있는 최고 주파수가 <b>f</b>라면, 샘플레이트가 <b>2f</b>보다 크기만 하면<br>그 샘플만으로 원래 파형을 <b>완벽히</b> 복원할 수 있다.</div>
+  <p>샘플레이트의 절반(<span class="math">f<sub>s</sub>/2</span>)을 <b>나이퀴스트 주파수</b>라 합니다. CD의 44,100 Hz는
+     <b>22,050 Hz</b>까지 담을 수 있고, 이는 사람의 가청 한계(약 20 kHz)를 살짝 넘습니다 — 우연이 아니죠.
+     그런데 나이퀴스트보다 <b>높은</b> 주파수를 샘플링하면, 그 음은 사라지는 게 아니라 <b>엉뚱한 낮은 음으로 둔갑</b>합니다.
+     이 위장 현상이 <b>에일리어싱(aliasing)</b>입니다. 아래에서 신호 주파수를 나이퀴스트 선 너머로 밀어보세요.</p>
+  <canvas id="w3" style="height:190px"></canvas>
+  <div class="legend">
+    <span><i class="swatch" style="background:#7c9cff"></i>진짜 신호</span>
+    <span><i class="swatch" style="background:#ffb454"></i>샘플 점</span>
+    <span><i class="swatch" style="background:#f87171"></i>샘플이 만들어내는 가짜 음(에일리어스)</span>
+  </div>
+  <div class="ctrl"><label>신호 주파수 <b id="w3f">8 cyc</b></label><input type="range" id="w3fr" min="1" max="38" value="8" step="1"></div>
+  <div class="ctrl"><label>샘플레이트 fₛ <b id="w3s">20 /window</b> · 나이퀴스트 <b id="w3n">10</b></label><input type="range" id="w3sr" min="6" max="40" value="20" step="1"></div>
+  <p id="w3msg" style="font-size:.86rem"></p>
+  <div class="row">
+    <button class="play" id="w3p1">▶ 진짜 신호 듣기</button>
+    <button class="play" id="w3p2">▶ 샘플이 만든 소리 듣기</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="color:var(--accent2)">비트 심도 — 높이도 숫자로 끊어 적는다 (양자화)</h3>
+  <p>시간만 쪼개는 게 아닙니다. 측정한 <b>높이값</b>도 정해진 칸으로 반올림해 정수로 저장합니다.
+     16비트는 <span class="math">2<sup>16</sup>=65,536</span>칸, 8비트는 256칸. 칸이 적으면 파형이 거칠어지고
+     '치익' 하는 양자화 잡음이 끼지요. 아래에서 비트를 줄여 계단이 거칠어지는 걸 보세요.</p>
+  <canvas id="w4" style="height:170px"></canvas>
+  <div class="legend">
+    <span><i class="swatch" style="background:#7c9cff"></i>원래 파형</span>
+    <span><i class="swatch" style="background:#ffb454"></i>양자화된 파형</span>
+  </div>
+  <div class="ctrl"><label>비트 심도 <b id="w4b">4 bit (16칸)</b></label><input type="range" id="w4br" min="1" max="8" value="4" step="1"></div>
+  <button class="play" id="w4play">▶ 양자화된 소리 듣기</button>
+  <div class="callout" style="margin-top:14px">
+    <h3>wav 파일 한 줄 요약</h3>
+    <p style="color:var(--text)"><code>[RIFF 헤더 44바이트: 샘플레이트·비트심도·채널수]</code> +
+       <code>[샘플값 16비트 정수의 긴 행렬]</code>. 압축이 없어 용량은 크지만(스테레오 44.1k/16bit ≈ 10MB/분),
+       원본 그대로라 편집·분석에 이상적입니다. mp3는 여기에 심리음향 압축을 더한 것뿐입니다.</p>
+  </div>
+</div>
+
+<h2><span class="no">3</span>주파수 분석 — 모든 소리는 사인파의 합 (푸리에)</h2>
+<div class="card">
+  <p>핵심 정리 하나가 디지털 음향 전체를 떠받칩니다. <b>어떤 파형이든, 아무리 복잡해도, 서로 다른 주파수의
+     사인파들을 적절한 크기로 더한 것</b>으로 분해할 수 있습니다(푸리에). 거꾸로, 사인파들을 쌓으면 어떤 음색이든 만들 수 있죠.
+     사각파·톱니파 버튼을 눌러, 단순한 사인파들이 쌓여 복잡한 모양과 <b>주파수 스펙트럼</b>이 만들어지는 걸 보세요.</p>
+  <div class="presets" id="fpre"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="fgrid">
+    <div>
+      <canvas id="fwave" style="height:160px"></canvas>
+      <div class="cap">합성 파형 (시간 영역)</div>
+    </div>
+    <div>
+      <canvas id="fspec" style="height:160px"></canvas>
+      <div class="cap">주파수 스펙트럼 (각 배음의 크기)</div>
+    </div>
+  </div>
+  <div id="fsliders" style="margin-top:12px"></div>
+  <button class="play" id="fplay" style="margin-top:8px">▶ 이 음색 듣기</button>
+  <p style="font-size:.82rem;margin-top:10px">FFT(고속 푸리에 변환)는 이 분해를 컴퓨터가 순식간에 해내는 알고리즘입니다.
+     스펙트럼을 보고 특정 주파수만 키우거나 줄이면 그것이 곧 <b>이퀄라이저(EQ)</b>이고,
+     특정 배음만 남기면 보컬·악기 분리의 출발점이 됩니다.</p>
+</div>
+
+<h2><span class="no">4</span>위상 — 같은 음도 어긋나면 사라진다</h2>
+<div class="card">
+  <p>주파수와 진폭이 같아도 파형은 <b>시작 시점</b>이 다를 수 있습니다. 이 어긋남이 <b>위상(phase)</b>입니다.
+     같은 사인파 두 개를 위상만 어긋나게 더하면? <b>180°</b>(반 주기) 어긋나면 한쪽의 봉우리가 다른 쪽의 골과 만나
+     완벽히 <b>0</b>이 됩니다 — 소리가 사라지죠. 노이즈 캔슬링 헤드폰이 바로 이 원리입니다.</p>
+  <canvas id="w5" style="height:180px"></canvas>
+  <div class="legend">
+    <span><i class="swatch" style="background:#7c9cff"></i>파형 A</span>
+    <span><i class="swatch" style="background:#f472b6"></i>파형 B (위상 이동)</span>
+    <span><i class="swatch" style="background:#ffb454"></i>A + B 합</span>
+  </div>
+  <div class="ctrl"><label>B의 위상 <b id="w5p">180°</b></label><input type="range" id="w5pr" min="0" max="360" value="180" step="1"></div>
+  <p id="w5msg" style="font-size:.86rem"></p>
+  <button class="play" id="w5play">▶ A + B 합 듣기</button>
+</div>
+
+<div class="card">
+  <h3 style="color:var(--accent2)">옛날 '보컬 리무버'는 어떻게 가능했나</h3>
+  <p>스테레오 곡을 녹음할 때, <b>보컬은 보통 정중앙</b>에 둡니다 — 즉 왼쪽(L)과 오른쪽(R) 채널에 <b>똑같이</b> 들어갑니다.
+     반면 기타·드럼 등은 좌우로 살짝 다르게 퍼뜨리죠. 그래서 <b>L에서 R을 빼면</b>(L−R):
+     양쪽에 동일한 보컬은 4장의 원리로 <b>상쇄되어 사라지고</b>, 좌우가 다른 반주만 남습니다.
+     값싼 노래방 기계가 쓰던 트릭입니다. (요즘은 AI가 훨씬 잘하지만, 원리는 이 한 줄 뺄셈이었습니다.)</p>
+  <div class="eq">L = 보컬 + 반주<sub>L</sub> &nbsp;,&nbsp; R = 보컬 + 반주<sub>R</sub> &nbsp;⇒&nbsp; <b>L − R = 반주<sub>L</sub> − 반주<sub>R</sub></b> (보컬 소멸)</div>
+  <div class="row">
+    <button class="play" id="vrFull">▶ 원곡 (보컬 + 반주)</button>
+    <button class="play" id="vrInst">▶ L − R (보컬 제거)</button>
+  </div>
+  <p style="font-size:.82rem;margin-top:8px">한계도 분명합니다: 정중앙의 베이스·킥드럼도 같이 사라지고, 리버브가 걸린 보컬은
+     좌우가 달라 완전히는 안 지워집니다. 그래서 '리무버'지 '완벽 분리'가 아니었죠.</p>
+</div>
+
+<h2><span class="no">5</span>이펙트 랙 — 도구가 파형에 무슨 일을 하는가</h2>
+<p style="color:var(--dim)">이제 음향 작업에서 쓰는 도구들이 파형을 어떻게 주무르는지 봅니다. 각 카드의 그래프는
+   <b style="color:#7c9cff">입력 파형(옅은 파랑)</b>과 그 도구를 거친 <b style="color:#ffb454">출력 파형(주황)</b>을 겹쳐 보여줍니다.
+   슬라이더를 움직이면 그래프가 실시간으로 바뀌고, <b>▶ 들어보기</b>를 누르면 같은 효과를 실제 소리(반복되는 짧은 멜로디)에 걸어
+   <b>아래 오실로스코프</b>에 실시간 파형으로 띄웁니다. 분류 태그:
+   <span class="tag pitch">음높이</span><span class="tag time">시간/공간</span><span class="tag dyn">음량/동역학</span><span class="tag">음색</span></p>
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div class="row">
+      <button class="play" id="srcPlay">▶ 원음 재생 (효과 없음)</button>
+      <button id="srcStop">■ 정지</button>
+    </div>
+    <span style="font-size:.82rem;color:var(--dim)" id="liveLabel">정지됨</span>
+  </div>
+  <canvas id="scope" style="height:120px;margin-top:12px"></canvas>
+  <div class="cap">실시간 오실로스코프 — 지금 재생 중인(효과가 걸린) 소리의 파형</div>
+</div>
+<div class="fxgrid" id="fxgrid"></div>
+
+<footer>
+  소리 = 파형 · 샘플링 · 푸리에 · 위상 · 이펙트 — 디지털 오디오의 원리를 직접 만지며 배우기 ·
+  모든 음향은 Web Audio API로 실시간 합성/처리됩니다
+</footer>
+</div>
+
+<script>
+'use strict';
+/* ═══════════════════════ 공통 유틸 ═══════════════════════ */
+const TAU = Math.PI * 2;
+const C4 = 261.63;
+const lerp = (a, idx) => {
+  const i = Math.floor(idx), f = idx - i;
+  if (i < 0 || i + 1 >= a.length) return 0;
+  return a[i] * (1 - f) + a[i + 1] * f;
+};
+
+/* 캔버스 그리기: curves = [{y:Float32Array(-1..1), color, width, alpha, dots}] */
+let REDRAW = [];
+function mount(canvas, draw) {
+  draw();
+  REDRAW = REDRAW.filter(r => r.canvas !== canvas);
+  REDRAW.push({ canvas, draw });
+}
+window.addEventListener('resize', () => {
+  REDRAW = REDRAW.filter(r => r.canvas.isConnected);
+  REDRAW.forEach(r => r.draw());
+});
+function plot(canvas, curves, opts = {}) {
+  const draw = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight || 140;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const c = canvas.getContext('2d'); c.scale(dpr, dpr);
+    c.clearRect(0, 0, w, h);
+    const mid = h / 2, amp = h * 0.44;
+    c.strokeStyle = '#2b3344'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, mid); c.lineTo(w, mid); c.stroke();
+    if (opts.nay != null) { // 나이퀴스트 표시용 수직선 (사용 안하면 생략)
+    }
+    curves.forEach(cv => {
+      const n = cv.y.length;
+      c.globalAlpha = cv.alpha == null ? 1 : cv.alpha;
+      if (cv.dots) {
+        c.fillStyle = cv.color;
+        for (let i = 0; i < n; i++) {
+          const x = cv.xs ? cv.xs[i] * w : (n === 1 ? w / 2 : i / (n - 1) * w);
+          c.beginPath(); c.arc(x, mid - amp * cv.y[i], cv.r || 2.5, 0, TAU); c.fill();
+          if (cv.stem) { c.strokeStyle = cv.color; c.lineWidth = 1; c.beginPath(); c.moveTo(x, mid); c.lineTo(x, mid - amp * cv.y[i]); c.stroke(); }
+        }
+      } else {
+        c.strokeStyle = cv.color; c.lineWidth = cv.width || 1.5;
+        c.beginPath();
+        for (let i = 0; i < n; i++) {
+          const x = cv.xs ? cv.xs[i] * w : i / (n - 1) * w;
+          const yy = mid - amp * cv.y[i];
+          i ? c.lineTo(x, yy) : c.moveTo(x, yy);
+        }
+        c.stroke();
+      }
+      c.globalAlpha = 1;
+    });
+  };
+  mount(canvas, draw);
+}
+
+/* ═══════════════════════ 오디오 코어 ═══════════════════════ */
+let actx = null;
+function AC() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+/* 짧은 사인파 묶음 재생 (엔벨로프 포함) */
+function tone(freqs, dur = 1.5, type = 'sine', gain = 0.5) {
+  const ctx = AC(), t0 = ctx.currentTime;
+  const m = ctx.createGain();
+  m.gain.setValueAtTime(0, t0);
+  m.gain.linearRampToValueAtTime(gain / Math.sqrt(freqs.length), t0 + 0.02);
+  m.gain.setValueAtTime(gain / Math.sqrt(freqs.length), t0 + dur - 0.2);
+  m.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  m.connect(ctx.destination);
+  freqs.forEach(f => {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = f;
+    o.connect(m); o.start(t0); o.stop(t0 + dur + 0.05);
+  });
+  return { ctx, m };
+}
+
+/* 효과 랙용 멜로디 루프 버퍼 (퍼커시브 아르페지오) */
+let LOOP = null;
+function loopBuffer() {
+  const ctx = AC();
+  if (LOOP && LOOP.sampleRate === ctx.sampleRate) return LOOP;
+  const sr = ctx.sampleRate, dur = 2.0, len = Math.floor(sr * dur);
+  const buf = ctx.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  const seq = [0, 4, 7, 12, 7, 4, 0, -5];
+  const nl = dur / seq.length;
+  seq.forEach((semi, k) => {
+    const f = C4 * Math.pow(2, semi / 12);
+    const s0 = Math.floor(k * nl * sr), n = Math.floor(nl * sr);
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      const env = Math.exp(-t * 4.5) * (1 - Math.exp(-t * 300));
+      const s = Math.sin(TAU * f * t) + 0.4 * Math.sin(TAU * 2 * f * t) + 0.18 * Math.sin(TAU * 3 * f * t);
+      d[s0 + i] += s * env * 0.32;
+    }
+  });
+  LOOP = buf;
+  return buf;
+}
+function makeDistCurve(k) {
+  const n = 1024, curve = new Float32Array(n), deg = Math.PI / 180;
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1) * 2 - 1;
+    curve[i] = (3 + k) * x * 20 * deg / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+function makeIR(decay) {
+  const ctx = AC(), len = Math.floor(ctx.sampleRate * 1.6);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return buf;
+}
+
+/* ═══════════════════════ 1. 파형 탐색기 ═══════════════════════ */
+(function () {
+  const fr = document.getElementById('w1fr'), ar = document.getElementById('w1ar');
+  const fl = document.getElementById('w1f'), al = document.getElementById('w1a'), note = document.getElementById('w1note');
+  const NMS = ['도', '도♯', '레', '레♯', '미', '파', '파♯', '솔', '솔♯', '라', '라♯', '시'];
+  function nameOf(f) {
+    const s = Math.round(12 * Math.log2(f / C4));
+    return NMS[((s % 12) + 12) % 12] + (Math.floor(s / 12) + 4);
+  }
+  function render() {
+    const f = +fr.value, a = +ar.value / 100;
+    fl.textContent = f + ' Hz'; al.textContent = a.toFixed(2);
+    note.textContent = '≈ ' + nameOf(f) + ' 음';
+    const N = 700, cyc = f / 110; // 화면에 보일 주기 수 (110Hz=2주기 기준)
+    const y = new Float32Array(N);
+    for (let i = 0; i < N; i++) y[i] = a * Math.sin(TAU * cyc * (i / N));
+    plot(document.getElementById('w1'), [{ y, color: '#7c9cff', width: 2 }]);
+  }
+  fr.oninput = ar.oninput = render;
+  document.getElementById('w1play').onclick = () => tone([+fr.value], 1.4, 'sine', +ar.value / 100 * 0.7);
+  render();
+})();
+
+/* 2배속 데모 */
+(function () {
+  function playRate(r) {
+    const ctx = AC(), src = ctx.createBufferSource();
+    src.buffer = loopBuffer(); src.playbackRate.value = r;
+    const g = ctx.createGain(); g.gain.value = 0.7;
+    src.connect(g); g.connect(ctx.destination); src.start();
+    src.stop(ctx.currentTime + 2.0 / r + 0.1);
+  }
+  document.getElementById('sp05').onclick = () => playRate(0.5);
+  document.getElementById('sp10').onclick = () => playRate(1.0);
+  document.getElementById('sp20').onclick = () => playRate(2.0);
+})();
+
+/* ═══════════════════════ 2. 샘플링 ═══════════════════════ */
+(function () {
+  const sr = document.getElementById('w2sr'), sl = document.getElementById('w2s');
+  function render() {
+    const ns = +sr.value; sl.textContent = ns + ' samples/window';
+    const N = 700, cyc = 3;
+    const cont = new Float32Array(N);
+    for (let i = 0; i < N; i++) cont[i] = 0.8 * Math.sin(TAU * cyc * (i / N));
+    // 샘플 점 + 계단
+    const sx = new Float32Array(ns), sy = new Float32Array(ns);
+    for (let k = 0; k < ns; k++) { const t = k / ns; sx[k] = t; sy[k] = 0.8 * Math.sin(TAU * cyc * t); }
+    const step = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const k = Math.floor(i / N * ns); step[i] = sy[Math.min(k, ns - 1)]; }
+    plot(document.getElementById('w2'), [
+      { y: cont, color: '#7c9cff', width: 1.5, alpha: .55 },
+      { y: step, color: '#4ade80', width: 1.5 },
+      { y: sy, xs: sx, color: '#ffb454', dots: true, stem: true, r: 3 },
+    ]);
+  }
+  sr.oninput = render; render();
+})();
+
+/* 나이퀴스트 / 에일리어싱 */
+(function () {
+  const fr = document.getElementById('w3fr'), srr = document.getElementById('w3sr');
+  const fl = document.getElementById('w3f'), srl = document.getElementById('w3s'), nl = document.getElementById('w3n');
+  const msg = document.getElementById('w3msg');
+  function aliasFreq(f, fs) { const k = Math.round(f / fs); return Math.abs(f - k * fs); }
+  function render() {
+    const f = +fr.value, fs = +srr.value, nyq = fs / 2, af = aliasFreq(f, fs);
+    fl.textContent = f + ' cyc'; srl.textContent = fs + ' /window'; nl.textContent = nyq.toFixed(1);
+    const N = 760;
+    const real = new Float32Array(N), alias = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const t = i / N; real[i] = 0.8 * Math.sin(TAU * f * t); alias[i] = 0.8 * Math.sin(TAU * af * t); }
+    const sx = new Float32Array(fs), sy = new Float32Array(fs);
+    for (let k = 0; k < fs; k++) { const t = k / fs; sx[k] = t; sy[k] = 0.8 * Math.sin(TAU * f * t); }
+    const curves = [
+      { y: real, color: '#7c9cff', width: 1.5, alpha: .5 },
+      { y: sy, xs: sx, color: '#ffb454', dots: true, stem: true, r: 3 },
+    ];
+    if (f > nyq) curves.splice(1, 0, { y: alias, color: '#f87171', width: 2 });
+    plot(document.getElementById('w3'), curves);
+    if (f <= nyq)
+      msg.innerHTML = `<span style="color:var(--good)">✓ 안전</span> — 신호(${f})가 나이퀴스트(${nyq.toFixed(1)})보다 낮아 샘플만으로 완벽히 복원됩니다.`;
+    else
+      msg.innerHTML = `<span style="color:var(--bad)">✗ 에일리어싱!</span> — 신호 ${f}가 나이퀴스트 ${nyq.toFixed(1)}를 넘어, 샘플은 가짜 저음 <b>${af.toFixed(1)} cyc</b>로 둔갑합니다. (붉은 곡선이 그 가짜 음)`;
+  }
+  fr.oninput = srr.oninput = render;
+  const base = 90; // cyc→Hz 매핑
+  document.getElementById('w3p1').onclick = () => tone([+fr.value * base], 1.2);
+  document.getElementById('w3p2').onclick = () => {
+    const af = aliasFreq(+fr.value, +srr.value);
+    tone([Math.max(40, af * base)], 1.2);
+  };
+  render();
+})();
+
+/* 비트 심도 (양자화) */
+(function () {
+  const br = document.getElementById('w4br'), bl = document.getElementById('w4b');
+  function render() {
+    const bits = +br.value, levels = Math.pow(2, bits);
+    bl.textContent = bits + ' bit (' + levels + '칸)';
+    const N = 700, cyc = 2.5;
+    const orig = new Float32Array(N), q = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const v = 0.85 * Math.sin(TAU * cyc * (i / N));
+      orig[i] = v; q[i] = Math.round(v * (levels / 2)) / (levels / 2);
+    }
+    plot(document.getElementById('w4'), [
+      { y: orig, color: '#7c9cff', width: 1.5, alpha: .5 },
+      { y: q, color: '#ffb454', width: 1.8 },
+    ]);
+  }
+  br.oninput = render;
+  document.getElementById('w4play').onclick = () => {
+    const ctx = AC(), bits = +br.value, levels = Math.pow(2, bits);
+    const o = ctx.createOscillator(); o.frequency.value = 220; o.type = 'sine';
+    const ws = ctx.createWaveShaper(), n = 4096, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; curve[i] = Math.round(x * (levels / 2)) / (levels / 2); }
+    ws.curve = curve;
+    const g = ctx.createGain(), t0 = ctx.currentTime;
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.4, t0 + 0.02);
+    g.gain.setValueAtTime(0.4, t0 + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.5);
+    o.connect(ws); ws.connect(g); g.connect(ctx.destination);
+    o.start(t0); o.stop(t0 + 1.55);
+  };
+  render();
+})();
+
+/* ═══════════════════════ 3. 푸리에 / 가산 합성 ═══════════════════════ */
+(function () {
+  const NH = 8;
+  let amps = [1, 0, 0.33, 0, 0.2, 0, 0.14, 0]; // 초기: 사각파 근사
+  const slidersEl = document.getElementById('fsliders');
+  // 슬라이더 생성
+  const sliders = [];
+  for (let h = 0; h < NH; h++) {
+    const div = document.createElement('div'); div.className = 'ctrl';
+    div.innerHTML = `<label>배음 ${h + 1} (${(h + 1)}×f) <b>${amps[h].toFixed(2)}</b></label>`;
+    const inp = document.createElement('input'); inp.type = 'range'; inp.min = 0; inp.max = 100; inp.step = 1;
+    inp.value = Math.round(amps[h] * 100);
+    inp.oninput = () => { amps[h] = +inp.value / 100; div.querySelector('b').textContent = amps[h].toFixed(2); render(); };
+    div.appendChild(inp); slidersEl.appendChild(div); sliders.push({ inp, div });
+  }
+  const PRESETS = {
+    '사인 (순음)': [1, 0, 0, 0, 0, 0, 0, 0],
+    '톱니파': [1, .5, .33, .25, .2, .167, .14, .125],
+    '사각파': [1, 0, .33, 0, .2, 0, .14, 0],
+    '삼각파': [1, 0, .11, 0, .04, 0, .02, 0],
+    '오르간풍': [1, .7, 0, .5, 0, 0, .3, 0],
+  };
+  const pre = document.getElementById('fpre');
+  Object.keys(PRESETS).forEach(k => {
+    const b = document.createElement('button'); b.textContent = k;
+    b.onclick = () => { amps = PRESETS[k].slice(); sliders.forEach((s, i) => { s.inp.value = Math.round(amps[i] * 100); s.div.querySelector('b').textContent = amps[i].toFixed(2); }); render(); };
+    pre.appendChild(b);
+  });
+  function render() {
+    const N = 700, y = new Float32Array(N);
+    let norm = amps.reduce((a, b) => a + Math.abs(b), 0) || 1;
+    for (let i = 0; i < N; i++) {
+      let s = 0; const t = i / N;
+      for (let h = 0; h < NH; h++) s += amps[h] * Math.sin(TAU * (h + 1) * 1 * t * 2);
+      y[i] = s / norm * 0.9;
+    }
+    plot(document.getElementById('fwave'), [{ y, color: '#7c9cff', width: 2 }]);
+    plot(document.getElementById('fspec'), [{ y: Float32Array.from(amps, v => v / (Math.max(...amps) || 1) * 0.9), color: '#ffb454', dots: true, stem: true, r: 4 }]);
+  }
+  document.getElementById('fplay').onclick = () => {
+    const ctx = AC(), n = NH + 1, re = new Float32Array(n), im = new Float32Array(n);
+    amps.forEach((a, i) => im[i + 1] = a);
+    const wave = ctx.createPeriodicWave(re, im);
+    const o = ctx.createOscillator(); o.setPeriodicWave(wave); o.frequency.value = 196;
+    const g = ctx.createGain(), t0 = ctx.currentTime;
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.35, t0 + 0.02);
+    g.gain.setValueAtTime(0.35, t0 + 1.4); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.7);
+    o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0 + 1.75);
+  };
+  render();
+})();
+
+/* ═══════════════════════ 4. 위상 ═══════════════════════ */
+(function () {
+  const pr = document.getElementById('w5pr'), pl = document.getElementById('w5p'), msg = document.getElementById('w5msg');
+  function render() {
+    const ph = +pr.value; pl.textContent = ph + '°';
+    const rad = ph * Math.PI / 180, N = 700, cyc = 3;
+    const A = new Float32Array(N), B = new Float32Array(N), S = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N; A[i] = 0.7 * Math.sin(TAU * cyc * t);
+      B[i] = 0.7 * Math.sin(TAU * cyc * t + rad); S[i] = (A[i] + B[i]) * 0.7;
+    }
+    plot(document.getElementById('w5'), [
+      { y: A, color: '#7c9cff', width: 1.5, alpha: .6 },
+      { y: B, color: '#f472b6', width: 1.5, alpha: .6 },
+      { y: S, color: '#ffb454', width: 2.2 },
+    ]);
+    const amp = 2 * Math.abs(Math.cos(rad / 2));
+    if (ph === 180) msg.innerHTML = `<span style="color:var(--bad)">완전 상쇄</span> — 합이 평평한 0. 소리가 완전히 사라집니다.`;
+    else if (ph === 0) msg.innerHTML = `<span style="color:var(--good)">완전 보강</span> — 합의 진폭이 2배. 가장 큰 소리.`;
+    else msg.innerHTML = `합의 진폭 배수 ≈ <b>${amp.toFixed(2)}</b> (2·|cos(위상/2)|). 위상에 따라 보강과 상쇄 사이를 오갑니다.`;
+  }
+  pr.oninput = render;
+  document.getElementById('w5play').onclick = () => {
+    const ctx = AC(), rad = +pr.value * Math.PI / 180, t0 = ctx.currentTime, f = 330;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.5, t0 + 0.02);
+    g.gain.setValueAtTime(0.5, t0 + 1.3); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.6);
+    g.connect(ctx.destination);
+    const o1 = ctx.createOscillator(); o1.frequency.value = f; o1.connect(g);
+    const o2 = ctx.createOscillator(); o2.frequency.value = f;
+    const delay = ctx.createDelay(); delay.delayTime.value = rad / (TAU * f); o2.connect(delay); delay.connect(g);
+    o1.start(t0); o2.start(t0); o1.stop(t0 + 1.65); o2.stop(t0 + 1.65);
+  };
+  render();
+})();
+
+/* 보컬 리무버 */
+(function () {
+  function buildVocalDemo() {
+    const ctx = AC(), sr = ctx.sampleRate, dur = 2.4, len = Math.floor(sr * dur);
+    const L = new Float32Array(len), R = new Float32Array(len);
+    // 보컬 (정중앙, 양쪽 동일): 느린 멜로디 + 비브라토 + 배음
+    const vseq = [7, 9, 11, 12, 11, 9];
+    const vnl = dur / vseq.length;
+    for (let k = 0; k < vseq.length; k++) {
+      const f = C4 * Math.pow(2, vseq[k] / 12);
+      const s0 = Math.floor(k * vnl * sr), n = Math.floor(vnl * sr);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const vib = 1 + 0.01 * Math.sin(TAU * 5 * t);
+        const env = Math.min(1, t * 8) * Math.min(1, (vnl - t) * 8);
+        const s = (Math.sin(TAU * f * vib * t) + 0.3 * Math.sin(TAU * 2 * f * t)) * env * 0.3;
+        L[s0 + i] += s; R[s0 + i] += s;
+      }
+    }
+    // 반주: 좌우 다른 화음 패드
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      L[i] += 0.12 * Math.sin(TAU * C4 * 0.5 * t) + 0.1 * Math.sin(TAU * C4 * 0.5 * Math.pow(2, 4 / 12) * t);
+      R[i] += 0.12 * Math.sin(TAU * C4 * 0.5 * Math.pow(2, 7 / 12) * t) + 0.1 * Math.sin(TAU * C4 * Math.pow(2, 3 / 12) * t);
+    }
+    const stereo = ctx.createBuffer(2, len, sr);
+    stereo.getChannelData(0).set(L); stereo.getChannelData(1).set(R);
+    const diff = ctx.createBuffer(1, len, sr);
+    const d = diff.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (L[i] - R[i]);
+    return { stereo, diff };
+  }
+  let demo = null;
+  function play(which) {
+    const ctx = AC(); if (!demo) demo = buildVocalDemo();
+    const src = ctx.createBufferSource();
+    src.buffer = which === 'full' ? demo.stereo : demo.diff;
+    const g = ctx.createGain(); g.gain.value = which === 'full' ? 0.9 : 1.6;
+    src.connect(g); g.connect(ctx.destination); src.start();
+  }
+  document.getElementById('vrFull').onclick = () => play('full');
+  document.getElementById('vrInst').onclick = () => play('inst');
+})();
+
+/* ═══════════════════════ 5. 이펙트 랙 ═══════════════════════ */
+/* --- 정적 시각화용 테스트 신호 --- */
+function genSignal(type) {
+  const N = 900, x = new Float32Array(N);
+  if (type === 'pluck') {
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      let v = 0;
+      [0, 0.5].forEach(s => { if (t >= s) { const u = t - s; v += Math.exp(-u * 14) * Math.sin(TAU * 14 * u); } });
+      x[i] = v * 0.85;
+    }
+  } else { // sustain
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      x[i] = 0.7 * (Math.sin(TAU * 8 * t) + 0.3 * Math.sin(TAU * 16 * t));
+    }
+  }
+  return x;
+}
+/* --- 정적 변환 --- */
+const TF = {
+  gain: (x, p) => x.map(v => v * p.gain),
+  pitch: (x, p) => { const y = new Float32Array(x.length); for (let n = 0; n < x.length; n++) y[n] = lerp(x, n * p.rate); return y; },
+  distortion: (x, p) => { const nrm = Math.tanh(p.drive) || 1; return x.map(v => Math.tanh(p.drive * v) / nrm); },
+  filter: (x, p) => { const y = new Float32Array(x.length); let pr = 0; const a = p.a; for (let n = 0; n < x.length; n++) { pr += a * (x[n] - pr); y[n] = pr; } return y; },
+  delay: (x, p) => { const y = Float32Array.from(x); const D = Math.max(1, Math.floor(p.d * x.length)); for (let n = D; n < y.length; n++) y[n] += p.fb * y[n - D]; let mx = 0; y.forEach(v => mx = Math.max(mx, Math.abs(v))); return mx > 1 ? y.map(v => v / mx) : y; },
+  reverb: (x, p) => {
+    const N = x.length, L = Math.floor(0.22 * N), ir = new Float32Array(L);
+    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 * 2 - 1; };
+    for (let i = 0; i < L; i++) ir[i] = rnd() * Math.pow(1 - i / L, p.decay);
+    const y = new Float32Array(N);
+    for (let n = 0; n < N; n++) { let s = x[n]; for (let k = 1; k < L; k++) if (n - k >= 0) s += x[n - k] * ir[k] * p.mix; y[n] = s; }
+    let mx = 0; y.forEach(v => mx = Math.max(mx, Math.abs(v))); return mx > 1 ? y.map(v => v / mx) : y;
+  },
+  tremolo: (x, p) => x.map((v, i) => v * (1 - p.depth * (0.5 - 0.5 * Math.cos(TAU * p.rate * i / x.length)))),
+  vibrato: (x, p) => { const y = new Float32Array(x.length); for (let n = 0; n < x.length; n++) { const off = p.depth * Math.sin(TAU * p.rate * n / x.length); y[n] = lerp(x, n + off); } return y; },
+  flanger: (x, p) => {
+    const N = x.length, y = new Float32Array(N);
+    for (let n = 0; n < N; n++) { const D = p.base + p.depth * (0.5 + 0.5 * Math.sin(TAU * p.rate * n / N)); const v = lerp(y, n - D); y[n] = x[n] + p.fb * v; }
+    let mx = 0; y.forEach(v => mx = Math.max(mx, Math.abs(v))); return mx > 1 ? y.map(v => v / mx * 0.95) : y;
+  },
+  chorus: (x, p) => {
+    const N = x.length, y = new Float32Array(N);
+    for (let n = 0; n < N; n++) {
+      const D1 = p.base + p.depth * Math.sin(TAU * 0.6 * n / N);
+      const D2 = p.base * 1.6 + p.depth * Math.sin(TAU * 0.9 * n / N + 1.5);
+      y[n] = (x[n] + lerp(x, n - D1) + lerp(x, n - D2)) / 2.2;
+    }
+    return y;
+  },
+  compressor: (x, p) => {
+    const N = x.length, y = new Float32Array(N); let env = 0;
+    const makeup = 1 / (p.thresh + (1 - p.thresh) / p.ratio);
+    for (let n = 0; n < N; n++) {
+      const a = Math.abs(x[n]); env = a > env ? a : env * 0.997 + a * 0.003;
+      let g = 1; if (env > p.thresh) g = (p.thresh + (env - p.thresh) / p.ratio) / env;
+      y[n] = x[n] * g * makeup;
+    }
+    return y;
+  },
+  bitcrush: (x, p) => {
+    const levels = Math.pow(2, p.bits), y = new Float32Array(x.length); let held = 0;
+    for (let n = 0; n < x.length; n++) { if (n % p.hold === 0) held = Math.round(x[n] * (levels / 2)) / (levels / 2); y[n] = held; }
+    return y;
+  },
+};
+
+/* --- 이펙트 정의 --- */
+const EFFECTS = [
+  {
+    id: 'gain', ko: '게인 / 볼륨', en: 'Gain', cat: 'dyn', sig: 'sustain',
+    d: '가장 단순한 도구. 파형 전체에 일정한 수를 곱해 키우거나 줄입니다. 1보다 크면 커지고, 너무 키우면 디스토션으로 넘어갑니다.',
+    ctrls: [{ id: 'gain', label: '게인', min: 0, max: 200, val: 140, fmt: v => '×' + (v / 100).toFixed(2), map: v => v / 100 }],
+  },
+  {
+    id: 'pitch', ko: '피치 / 속도', en: 'Pitch · Speed', cat: 'pitch', sig: 'sustain',
+    d: '재생 속도를 바꾸면 파형이 가로로 늘거나 줄어 음높이가 변합니다(1장의 2배속). 단, 속도도 같이 변합니다 — 둘을 떼는 진짜 피치 시프트는 입자 단위로 잘라 붙이는 별도 기술입니다.',
+    ctrls: [{ id: 'rate', label: '재생 배속', min: 50, max: 200, val: 150, fmt: v => '×' + (v / 100).toFixed(2) + ' (' + (12 * Math.log2(v / 100) >= 0 ? '+' : '') + (12 * Math.log2(v / 100)).toFixed(1) + '반음)', map: v => v / 100 }],
+  },
+  {
+    id: 'distortion', ko: '디스토션', en: 'Distortion', cat: 'tone', sig: 'sustain',
+    d: '봉우리를 짓눌러 깎아냅니다(클리핑). 부드러운 사인파가 사각파에 가까워지며 새로운 배음이 잔뜩 생겨 거칠고 두꺼운 소리가 됩니다. 일렉기타의 그 소리.',
+    ctrls: [{ id: 'drive', label: '드라이브', min: 1, max: 100, val: 30, fmt: v => v + '', map: v => v }],
+  },
+  {
+    id: 'filter', ko: '로우패스 필터 / EQ', en: 'Low-pass Filter', cat: 'tone', sig: 'sustain',
+    d: '높은 주파수를 깎아 부드럽게 만듭니다. 파형의 뾰족한 부분(고배음)이 둥글려지죠. 특정 대역만 키우거나 줄이는 EQ의 기본 단위입니다.',
+    ctrls: [{ id: 'a', label: '차단(열림 정도)', min: 2, max: 100, val: 20, fmt: v => v < 30 ? '어두움' : v < 70 ? '중간' : '밝음', map: v => v / 100 }],
+    audio: { freq: true },
+  },
+  {
+    id: 'delay', ko: '딜레이 / 에코', en: 'Delay · Echo', cat: 'time', sig: 'pluck',
+    d: '소리를 잠시 뒤에 다시 들려줍니다. 피드백을 주면 메아리가 점점 작아지며 여러 번 반복되죠. 산에서 "야호"의 디지털 버전.',
+    ctrls: [
+      { id: 'd', label: '딜레이 시간', min: 5, max: 40, val: 22, fmt: v => v + '%', map: v => v / 100, audioMap: v => v / 100 * 0.6 },
+      { id: 'fb', label: '피드백', min: 0, max: 85, val: 55, fmt: v => v + '%', map: v => v / 100 },
+    ],
+  },
+  {
+    id: 'reverb', ko: '리버브', en: 'Reverb', cat: 'time', sig: 'pluck',
+    d: '수천 개의 미세한 메아리로 "공간"을 만듭니다. 파형의 또렷한 윤곽이 뒤로 길게 번지며 잔향이 생기죠. 욕실에서 노래할 때 그 울림.',
+    ctrls: [
+      { id: 'decay', label: '잔향 길이', min: 10, max: 60, val: 30, fmt: v => (v / 20).toFixed(1) + 's', map: v => 7 - v / 10 },
+      { id: 'mix', label: '믹스(젖음)', min: 5, max: 90, val: 45, fmt: v => v + '%', map: v => v / 100 },
+    ],
+  },
+  {
+    id: 'tremolo', ko: '트레몰로', en: 'Tremolo', cat: 'dyn', sig: 'sustain',
+    d: '음량(진폭)을 주기적으로 키웠다 줄였다 합니다. 파형의 봉우리 높이가 물결치죠. 진폭 변조(AM)의 음악적 사용.',
+    ctrls: [
+      { id: 'rate', label: '속도', min: 1, max: 16, val: 6, fmt: v => v + ' Hz', map: v => v },
+      { id: 'depth', label: '깊이', min: 0, max: 100, val: 80, fmt: v => v + '%', map: v => v / 100 },
+    ],
+  },
+  {
+    id: 'vibrato', ko: '비브라토', en: 'Vibrato', cat: 'pitch', sig: 'sustain',
+    d: '음높이(주파수)를 주기적으로 살짝 올렸다 내립니다. 파형이 가로로 미세하게 늘었다 줄었다 하죠. 성악가의 떨리는 음. 주파수 변조(FM).',
+    ctrls: [
+      { id: 'rate', label: '속도', min: 1, max: 12, val: 5, fmt: v => v + ' Hz', map: v => v },
+      { id: 'depth', label: '깊이', min: 1, max: 12, val: 5, fmt: v => v + '', map: v => v, audioMap: v => v * 8 },
+    ],
+  },
+  {
+    id: 'flanger', ko: '플랜저', en: 'Flanger', cat: 'time', sig: 'sustain',
+    d: '아주 짧게(밀리초) 지연시킨 복사본을 원음과 더하되, 지연 시간을 천천히 흔듭니다. 특정 주파수들이 빗살처럼 상쇄·보강되며(콤 필터) "쉬익~" 하는 제트기 소리가 납니다.',
+    ctrls: [
+      { id: 'base', label: '기본 지연', min: 1, max: 12, val: 4, fmt: v => v + '', map: v => v, audioMap: v => v / 1000 },
+      { id: 'depth', label: '흔들림 폭', min: 1, max: 10, val: 5, fmt: v => v + '', map: v => v, audioMap: v => v / 2000 },
+      { id: 'rate', label: '속도', min: 1, max: 8, val: 2, fmt: v => v + '', map: v => v, audioMap: v => v * 0.3 },
+      { id: 'fb', label: '피드백', min: 0, max: 85, val: 60, fmt: v => v + '%', map: v => v / 100 },
+    ],
+  },
+  {
+    id: 'chorus', ko: '코러스 / 더블러', en: 'Chorus · Doubler', cat: 'time', sig: 'sustain',
+    d: '조금 더 길게(수십 ms) 지연하고 미세하게 음을 흔든 복사본 여러 개를 겹칩니다. 한 명이 여러 명이 같이 부르는 것처럼 두껍고 풍성해지죠 — "더블링"의 원리.',
+    ctrls: [
+      { id: 'base', label: '지연', min: 5, max: 40, val: 18, fmt: v => v + '', map: v => v, audioMap: v => v / 1000 },
+      { id: 'depth', label: '흔들림', min: 1, max: 16, val: 8, fmt: v => v + '', map: v => v, audioMap: v => v / 1500 },
+    ],
+  },
+  {
+    id: 'compressor', ko: '컴프레서', en: 'Compressor', cat: 'dyn', sig: 'pluck',
+    d: '큰 소리는 누르고 작은 소리는 (메이크업으로) 끌어올려 음량 차이를 줄입니다. 파형의 봉우리가 깎이고 전체가 균일·단단해지죠. 거의 모든 상업 음원에 쓰입니다.',
+    ctrls: [
+      { id: 'thresh', label: '임계값', min: 10, max: 80, val: 35, fmt: v => v + '%', map: v => v / 100, audioMap: v => -40 + v / 100 * 35 },
+      { id: 'ratio', label: '비율', min: 2, max: 20, val: 8, fmt: v => v + ':1', map: v => v },
+    ],
+  },
+  {
+    id: 'bitcrush', ko: '비트크러셔', en: 'Bitcrusher', cat: 'tone', sig: 'sustain',
+    d: '2장을 거꾸로 — 일부러 비트 심도와 샘플레이트를 낮춰 파형을 거친 계단으로 만듭니다. 8비트 게임기 같은 레트로 디지털 사운드가 나죠.',
+    ctrls: [
+      { id: 'bits', label: '비트 심도', min: 1, max: 8, val: 3, fmt: v => v + ' bit', map: v => v },
+      { id: 'hold', label: '다운샘플', min: 1, max: 24, val: 8, fmt: v => '1/' + v, map: v => v, audioMap: v => 1 / v },
+    ],
+  },
+];
+const CATLABEL = { pitch: ['음높이', 'pitch'], time: ['시간/공간', 'time'], dyn: ['음량/동역학', 'dyn'], tone: ['음색', ''] };
+
+/* --- 효과 랙 오디오 엔진 --- */
+let liveSrc = null, liveExtra = [], analyser = null, rafId = null, playingId = null;
+function ensureAnalyser() {
+  const ctx = AC();
+  if (!analyser) { analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.connect(ctx.destination); }
+  return analyser;
+}
+function stopLive() {
+  if (liveSrc) { try { liveSrc.stop(); } catch (e) {} liveSrc = null; }
+  liveExtra.forEach(n => { try { n.stop(); } catch (e) {} });
+  liveExtra = [];
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null; playingId = null;
+  document.querySelectorAll('.fxcard .demo').forEach(b => { b.classList.remove('playing'); b.textContent = '▶ 들어보기'; });
+  document.getElementById('srcPlay').classList.remove('playing');
+  document.getElementById('liveLabel').textContent = '정지됨';
+}
+function paramVals(eff, forAudio) {
+  const p = {};
+  eff.ctrls.forEach(c => {
+    const v = +document.getElementById('fx_' + eff.id + '_' + c.id).value;
+    p[c.id] = (forAudio && c.audioMap) ? c.audioMap(v) : c.map(v);
+  });
+  return p;
+}
+function buildChain(eff, p) {
+  const ctx = AC();
+  const src = ctx.createBufferSource(); src.buffer = loopBuffer(); src.loop = true;
+  let input, output; const starts = [];
+  switch (eff.id) {
+    case 'gain': { const g = ctx.createGain(); g.gain.value = p.gain; input = output = g; break; }
+    case 'pitch': { src.playbackRate.value = p.rate; const g = ctx.createGain(); input = output = g; break; }
+    case 'distortion': { const ws = ctx.createWaveShaper(); ws.curve = makeDistCurve(p.drive); ws.oversample = '4x'; const g = ctx.createGain(); g.gain.value = 0.7; ws.connect(g); input = ws; output = g; break; }
+    case 'filter': { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 200 + p.a * 8000; f.Q.value = 1; input = output = f; break; }
+    case 'delay': {
+      const dl = ctx.createDelay(1.0); dl.delayTime.value = p.d; const fb = ctx.createGain(); fb.gain.value = p.fb;
+      const wet = ctx.createGain(); wet.gain.value = 0.8; const inp = ctx.createGain(), out = ctx.createGain();
+      inp.connect(out); inp.connect(dl); dl.connect(wet); wet.connect(out); dl.connect(fb); fb.connect(dl); input = inp; output = out; break;
+    }
+    case 'reverb': {
+      const cv = ctx.createConvolver(); cv.buffer = makeIR(p.decay);
+      const wet = ctx.createGain(); wet.gain.value = p.mix; const dry = ctx.createGain(); dry.gain.value = 1 - p.mix * 0.5;
+      const inp = ctx.createGain(), out = ctx.createGain(); inp.connect(dry); dry.connect(out); inp.connect(cv); cv.connect(wet); wet.connect(out); input = inp; output = out; break;
+    }
+    case 'tremolo': { const g = ctx.createGain(); g.gain.value = 1 - p.depth * 0.5; const lfo = ctx.createOscillator(); lfo.frequency.value = p.rate; const ld = ctx.createGain(); ld.gain.value = p.depth * 0.5; lfo.connect(ld); ld.connect(g.gain); starts.push(lfo); input = output = g; break; }
+    case 'vibrato': { const lfo = ctx.createOscillator(); lfo.frequency.value = p.rate; const ld = ctx.createGain(); ld.gain.value = p.depth; lfo.connect(ld); ld.connect(src.detune); starts.push(lfo); const g = ctx.createGain(); input = output = g; break; }
+    case 'flanger': {
+      const dl = ctx.createDelay(0.05); dl.delayTime.value = p.base; const lfo = ctx.createOscillator(); lfo.frequency.value = p.rate;
+      const ld = ctx.createGain(); ld.gain.value = p.depth; lfo.connect(ld); ld.connect(dl.delayTime);
+      const fb = ctx.createGain(); fb.gain.value = p.fb; const wet = ctx.createGain(); wet.gain.value = 0.6;
+      const inp = ctx.createGain(), out = ctx.createGain(); inp.connect(out); inp.connect(dl); dl.connect(wet); wet.connect(out); dl.connect(fb); fb.connect(dl); starts.push(lfo); input = inp; output = out; break;
+    }
+    case 'chorus': {
+      const inp = ctx.createGain(), out = ctx.createGain(); inp.connect(out);
+      for (let i = 0; i < 2; i++) {
+        const dl = ctx.createDelay(0.1); dl.delayTime.value = p.base + i * 0.007;
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.4 + 0.35 * i; const ld = ctx.createGain(); ld.gain.value = p.depth;
+        lfo.connect(ld); ld.connect(dl.delayTime); const wet = ctx.createGain(); wet.gain.value = 0.5;
+        inp.connect(dl); dl.connect(wet); wet.connect(out); starts.push(lfo);
+      }
+      input = inp; output = out; break;
+    }
+    case 'compressor': { const comp = ctx.createDynamicsCompressor(); comp.threshold.value = p.thresh; comp.ratio.value = p.ratio; comp.attack.value = 0.003; comp.release.value = 0.12; const mk = ctx.createGain(); mk.gain.value = 1.8; comp.connect(mk); input = comp; output = mk; break; }
+    case 'bitcrush': {
+      const sp = ctx.createScriptProcessor(2048, 1, 1); const levels = Math.pow(2, p.bits); let phaser = 0, last = 0; const norm = p.hold;
+      sp.onaudioprocess = e => { const inB = e.inputBuffer.getChannelData(0), outB = e.outputBuffer.getChannelData(0); for (let i = 0; i < inB.length; i++) { phaser += norm; if (phaser >= 1) { phaser -= 1; last = Math.round(inB[i] * (levels / 2)) / (levels / 2); } outB[i] = last; } };
+      input = output = sp; break;
+    }
+    default: { const g = ctx.createGain(); input = output = g; }
+  }
+  src.connect(input);
+  return { src, input, output, starts };
+}
+function startScope(label) {
+  const canvas = document.getElementById('scope'), an = ensureAnalyser();
+  const buf = new Float32Array(an.fftSize);
+  document.getElementById('liveLabel').innerHTML = '🔊 재생 중: <b style="color:var(--good)">' + label + '</b>';
+  const loop = () => {
+    an.getFloatTimeDomainData(buf);
+    const step = Math.floor(buf.length / 700);
+    const y = new Float32Array(700);
+    for (let i = 0; i < 700; i++) y[i] = Math.max(-1, Math.min(1, buf[i * step] * 1.6));
+    plot(canvas, [{ y, color: '#4ade80', width: 1.6 }]);
+    rafId = requestAnimationFrame(loop);
+  };
+  loop();
+}
+function playEffect(eff) {
+  const wasPlaying = playingId === eff.id;
+  stopLive();
+  if (wasPlaying) return;
+  const p = paramVals(eff, true);
+  const { src, output, starts } = buildChain(eff, p);
+  output.connect(ensureAnalyser());
+  src.start(); starts.forEach(o => o.start());
+  liveSrc = src; liveExtra = starts; playingId = eff.id;
+  const btn = document.querySelector('#fxcard_' + eff.id + ' .demo');
+  btn.classList.add('playing'); btn.textContent = '■ 정지';
+  startScope(eff.ko);
+}
+/* 원음 재생 */
+document.getElementById('srcPlay').onclick = function () {
+  const wasSrc = playingId === '__src__'; stopLive(); if (wasSrc) return;
+  const ctx = AC(); const src = ctx.createBufferSource(); src.buffer = loopBuffer(); src.loop = true;
+  const g = ctx.createGain(); g.gain.value = 0.8; src.connect(g); g.connect(ensureAnalyser()); src.start();
+  liveSrc = src; playingId = '__src__'; this.classList.add('playing');
+  startScope('원음 (효과 없음)');
+};
+document.getElementById('srcStop').onclick = stopLive;
+
+/* --- 카드 렌더링 --- */
+(function buildFX() {
+  const grid = document.getElementById('fxgrid');
+  EFFECTS.forEach(eff => {
+    const card = document.createElement('div'); card.className = 'fxcard'; card.id = 'fxcard_' + eff.id;
+    const [clabel, ccls] = CATLABEL[eff.cat];
+    let ctrlHTML = '';
+    eff.ctrls.forEach(c => {
+      ctrlHTML += `<div class="ctrl"><label>${c.label} <b id="lbl_${eff.id}_${c.id}"></b></label>
+        <input type="range" id="fx_${eff.id}_${c.id}" min="${c.min}" max="${c.max}" step="1" value="${c.val}"></div>`;
+    });
+    card.innerHTML = `
+      <h3>${eff.ko}<span class="tag ${ccls}">${clabel}</span></h3>
+      <div class="en">${eff.en}</div>
+      <div class="d">${eff.d}</div>
+      <canvas id="cv_${eff.id}"></canvas>
+      <div class="legend"><span><i class="swatch" style="background:#7c9cff"></i>입력</span><span><i class="swatch" style="background:#ffb454"></i>출력</span></div>
+      ${ctrlHTML}
+      <div class="btns"><button class="play demo">▶ 들어보기</button></div>`;
+    grid.appendChild(card);
+
+    function redraw() {
+      const p = paramVals(eff, false);
+      eff.ctrls.forEach(c => { document.getElementById('lbl_' + eff.id + '_' + c.id).textContent = c.fmt(+document.getElementById('fx_' + eff.id + '_' + c.id).value); });
+      const x = genSignal(eff.sig);
+      const y = TF[eff.id](x, p);
+      plot(document.getElementById('cv_' + eff.id), [
+        { y: x, color: '#7c9cff', width: 1.3, alpha: .45 },
+        { y, color: '#ffb454', width: 1.8 },
+      ]);
+    }
+    eff.ctrls.forEach(c => {
+      document.getElementById('fx_' + eff.id + '_' + c.id).oninput = () => {
+        redraw();
+        // 재생 중이면 새 파라미터로 즉시 재시작 (toggle off→on)
+        if (playingId === eff.id) { playEffect(eff); playEffect(eff); }
+      };
+    });
+    card.querySelector('.demo').onclick = () => playEffect(eff);
+    redraw();
+  });
+})();
+</script>
+</body>
+</html>
