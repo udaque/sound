@@ -43,6 +43,8 @@
   button.play:hover{color:#fff;border-color:var(--accent)}
   button.ghost{background:transparent}
   button.active{border-color:var(--accent2);color:var(--accent2);background:#2a2316;font-weight:700}
+  button:disabled{opacity:.38;cursor:not-allowed;border-color:var(--border);color:var(--dim);background:var(--panel2)}
+  button:disabled:hover{border-color:var(--border);color:var(--dim)}
   button.playing{border-color:var(--good);color:var(--good);background:#13241a}
   .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .presets{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
@@ -430,8 +432,30 @@ function AC() {
   if (actx.state === 'suspended') actx.resume();
   return actx;
 }
+/* ── 재생 잠금: 한 번에 하나만 재생 (재생 중에는 모든 ▶ 버튼 비활성) ── */
+let PLAYING = false, playTimer = null;
+function lockPlay(keep) {
+  PLAYING = true;
+  document.querySelectorAll('button.play').forEach(b => { if (!keep || keep.indexOf(b) < 0) b.disabled = true; });
+}
+function unlockPlay() {
+  PLAYING = false;
+  if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+  document.querySelectorAll('button.play').forEach(b => b.disabled = false);
+}
+/* 짧은 일회성 재생: 허용되면 true(자동 해제 예약), 이미 재생 중이면 false */
+function oneShot(durSec) {
+  if (PLAYING) return false;
+  lockPlay();
+  playTimer = setTimeout(unlockPlay, durSec * 1000 + 150);
+  return true;
+}
+/* 지속 재생(루프·마이크): stopBtn만 남기고 나머지 비활성 */
+function lockContinuous(stopBtn) { lockPlay(stopBtn ? [stopBtn] : []); }
+
 /* 짧은 사인파 묶음 재생 (엔벨로프 포함) */
 function tone(freqs, dur = 1.5, type = 'sine', gain = 0.5) {
+  if (!oneShot(dur)) return null;
   const ctx = AC(), t0 = ctx.currentTime;
   const m = ctx.createGain();
   m.gain.setValueAtTime(0, t0);
@@ -513,6 +537,7 @@ function makeIR(decay) {
 /* 2배속 데모 */
 (function () {
   function playRate(r) {
+    if (!oneShot(2.0 / r + 0.1)) return;
     const ctx = AC(), src = ctx.createBufferSource();
     src.buffer = loopBuffer(); src.playbackRate.value = r;
     const g = ctx.createGain(); g.gain.value = 0.7;
@@ -600,6 +625,7 @@ function makeIR(decay) {
   }
   br.oninput = render;
   document.getElementById('w4play').onclick = () => {
+    if (!oneShot(1.55)) return;
     const ctx = AC(), bits = +br.value, levels = Math.pow(2, bits);
     const o = ctx.createOscillator(); o.frequency.value = 220; o.type = 'sine';
     const ws = ctx.createWaveShaper(), n = 4096, curve = new Float32Array(n);
@@ -654,6 +680,7 @@ function makeIR(decay) {
     plot(document.getElementById('fspec'), [{ y: Float32Array.from(amps, v => v / (Math.max(...amps) || 1) * 0.9), color: '#ffb454', dots: true, stem: true, r: 4 }]);
   }
   document.getElementById('fplay').onclick = () => {
+    if (!oneShot(1.75)) return;
     const ctx = AC(), n = NH + 1, re = new Float32Array(n), im = new Float32Array(n);
     amps.forEach((a, i) => im[i + 1] = a);
     const wave = ctx.createPeriodicWave(re, im);
@@ -689,6 +716,7 @@ function makeIR(decay) {
   }
   pr.oninput = render;
   document.getElementById('w5play').onclick = () => {
+    if (!oneShot(1.65)) return;
     const ctx = AC(), rad = +pr.value * Math.PI / 180, t0 = ctx.currentTime, f = 330;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.5, t0 + 0.02);
@@ -736,6 +764,7 @@ function makeIR(decay) {
   }
   let demo = null;
   function play(which) {
+    if (!oneShot(2.5)) return;
     const ctx = AC(); if (!demo) demo = buildVocalDemo();
     const src = ctx.createBufferSource();
     src.buffer = which === 'full' ? demo.stereo : demo.diff;
@@ -921,6 +950,7 @@ function stopLive() {
   document.querySelectorAll('.fxcard .demo').forEach(b => { b.classList.remove('playing'); b.textContent = '▶ 들어보기'; });
   document.getElementById('srcPlay').classList.remove('playing');
   document.getElementById('liveLabel').textContent = '정지됨';
+  unlockPlay();
 }
 function paramVals(eff, forAudio) {
   const p = {};
@@ -1003,6 +1033,7 @@ function playEffect(eff) {
   liveSrc = src; liveExtra = starts; playingId = eff.id;
   const btn = document.querySelector('#fxcard_' + eff.id + ' .demo');
   btn.classList.add('playing'); btn.textContent = '■ 정지';
+  lockContinuous(btn); // 재생 중: 이 '정지' 버튼만 남기고 모두 비활성
   startScope(eff.ko);
 }
 /* 원음 재생 */
@@ -1011,6 +1042,7 @@ document.getElementById('srcPlay').onclick = function () {
   const ctx = AC(); const src = ctx.createBufferSource(); src.buffer = loopBuffer(); src.loop = true;
   const g = ctx.createGain(); g.gain.value = 0.8; src.connect(g); g.connect(ensureAnalyser()); src.start();
   liveSrc = src; playingId = '__src__'; this.classList.add('playing');
+  lockContinuous(this); // 재생 중: 이 버튼(정지용)만 남기고 모두 비활성
   startScope('원음 (효과 없음)');
 };
 document.getElementById('srcStop').onclick = stopLive;
@@ -1100,7 +1132,9 @@ document.getElementById('srcStop').onclick = stopLive;
   }
   [A, D, S, R, C, Q].forEach(e => e.oninput = drawADSR);
   function note(freq) {
-    const ctx = AC(), p = params(), t0 = ctx.currentTime;
+    const p = params();
+    if (!oneShot(p.a + p.d + HOLD + p.r + 0.1)) return;
+    const ctx = AC(), t0 = ctx.currentTime;
     const o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = p.cut; f.Q.value = p.q;
     const g = ctx.createGain();
@@ -1156,7 +1190,9 @@ document.getElementById('srcStop').onclick = stopLive;
     return resample(timeStretch(input, ratio), ratio); // 늘였다가 그만큼 빠르게 → 길이 유지, 음높이 ↑
   }
   function playArr(arr, gain) {
-    const ctx = AC(), b = ctx.createBuffer(1, arr.length, ctx.sampleRate);
+    const ctx = AC();
+    if (!oneShot(arr.length / ctx.sampleRate + 0.1)) return;
+    const b = ctx.createBuffer(1, arr.length, ctx.sampleRate);
     b.getChannelData(0).set(arr);
     const s = ctx.createBufferSource(); s.buffer = b; const g = ctx.createGain(); g.gain.value = gain || 0.85;
     s.connect(g); g.connect(ctx.destination); s.start();
@@ -1215,6 +1251,7 @@ document.getElementById('srcStop').onclick = stopLive;
   }
   E('mFr').oninput = E('mLr').oninput = render;
   function blip(freqs, gains, dur) {
+    if (!oneShot(dur + 0.1)) return;
     const ctx = AC(), t0 = ctx.currentTime;
     freqs.forEach((f, i) => {
       const o = ctx.createOscillator(); o.frequency.value = f; const g = ctx.createGain();
@@ -1260,6 +1297,7 @@ document.getElementById('srcStop').onclick = stopLive;
     const ctx = AC(); const src = ctx.createMediaStreamSource(stream);
     an = ctx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.6; src.connect(an);
     running = true; E('micBtn').textContent = '■ 마이크 끄기'; E('micBtn').classList.add('playing'); E('micMsg').textContent = '소리를 내보세요. (재생되진 않고 분석만 합니다)';
+    lockContinuous(E('micBtn'));
     initGram();
     const sr = ctx.sampleRate, time = new Float32Array(an.fftSize), freq = new Uint8Array(an.frequencyBinCount);
     const loop = () => {
@@ -1281,7 +1319,7 @@ document.getElementById('srcStop').onclick = stopLive;
     };
     loop();
   }
-  function stop() { running = false; if (raf) cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } E('micBtn').textContent = '🎤 마이크 켜기'; E('micBtn').classList.remove('playing'); E('micPitch').textContent = ''; }
+  function stop() { running = false; if (raf) cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } E('micBtn').textContent = '🎤 마이크 켜기'; E('micBtn').classList.remove('playing'); E('micPitch').textContent = ''; unlockPlay(); }
   E('micBtn').onclick = () => { running ? stop() : start(); };
 })();
 </script>
